@@ -1,5 +1,135 @@
 <div align="center">
 
+# ARTEX3
+
+**ARTEX2 + 内置 Norma SDK + 渗透工具链**
+
+[上游 ARTEX](https://github.com/Hinln/ARTEX) · AGPL-3.0 · 私有仓库
+
+</div>
+
+---
+
+## 这个仓库是什么
+
+`ARTEX3` 是 [ARTEX2](https://github.com/zzusec/ARTEX2) 的衍生版，做了两处改动：
+
+### 1. 内置 Norma SDK（构建不再依赖私有仓库）
+
+原本 `go.mod` 依赖 `github.com/Autumn-27/norma`，而**该仓库在 GitHub 上是私有的（404）**——只有通过 `proxy.golang.org` 的模块代理缓存才能拉到。这意味着：
+
+- 一旦代理缓存被清、或网络不通，**构建直接失败**
+- 无法离线构建
+- 无法查看/修改 SDK 源码
+
+现在把 Norma v0.4.3 源码内置到 `norma/` 目录（210 个文件），并在 `go.mod` 加一行：
+
+```
+replace github.com/Autumn-27/norma => ./norma
+```
+
+**构建完全自包含**，不联网也能编译。
+
+### 2. 补渗透工具链
+
+原 `Dockerfile` 只装了 `nmap` + 基础工具。补上：
+
+| 工具 | 版本 | 用途 |
+|---|---|---|
+| **nuclei** | v3.11.1 | 漏洞模板扫描（主力）|
+| **httpx** | v1.12.0 | HTTP 探测 / 指纹 |
+| **ffuf** | v2.3.0 | 目录 / 参数爆破 |
+| **gobuster** | 3.5 | 目录 / DNS 爆破 |
+| **sqlmap** | 1.7.2 | SQL 注入 |
+| **wapiti** | 3.0.4 | Web 漏洞扫描 |
+| **whatweb** | 0.5.5 | 指纹识别 |
+| **dirb** | 2.22 | 目录扫描 |
+| **hydra** | 9.4 | 弱口令爆破 |
+
+> `nikto` 装不上——Debian bookworm 源里没有（Ubuntu 才有）。`nuclei` + `wapiti` 已覆盖其能力。
+
+---
+
+## 构建
+
+### 依赖
+
+- Go 1.26.3+
+- Node.js 20+
+- Docker（构建镜像时）
+
+### 本地构建
+
+```bash
+# 1. 前端静态导出
+cd web && npm ci && npm run build:static && cd ..
+cp -r web/out server/webui/dist
+
+# 2. 编译二进制（内嵌前端）
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -tags embedui -o dist/amd64/artex ./cmd/artex
+
+# 3. 构建镜像
+docker build -t artex:local .
+```
+
+### 验证 Norma 内置生效
+
+```bash
+go list -m github.com/Autumn-27/norma
+# 期望输出: github.com/Autumn-27/norma v0.4.3 => ./norma
+```
+
+---
+
+## 运行
+
+```bash
+cp .env.example .env      # 填 POSTGRES_PASSWORD，可选 LLM key
+docker compose up -d
+# → http://localhost:8787 （首访 /setup 设置管理员密码）
+```
+
+`docker-compose.override.yml` 把镜像指向本地构建的 `artex:local`（官方 `autumn27/artex` 是私有的）。
+
+---
+
+## ⚠️ 与上游的差异清单
+
+| 文件 | 改动 |
+|---|---|
+| `norma/` | **新增**（210 文件，Norma v0.4.3 源码）|
+| `go.mod` | 加 `replace github.com/Autumn-27/norma => ./norma` |
+| `Dockerfile` | apt 加 `sqlmap whatweb dirb hydra gobuster wapiti`；新增工具下载层 |
+| `docker-compose.override.yml` | **新增**（指向本地镜像）|
+| `llmpool/` | 含 `04acdc4` 的轮询组改动（同端点同优先级跨 key 分摊）|
+
+**其余代码与上游一致**。
+
+---
+
+## 许可与致谢
+
+- 本项目是 [ARTEX](https://github.com/Hinln/ARTEX)（作者 Autumn-27）的衍生作品，遵循 **AGPL-3.0**（见 `LICENSE`）
+- Agent 能力由 [norma](https://github.com/Autumn-27/norma) SDK 提供
+- 内置的 `norma/` 源码版权归原作者所有
+
+---
+
+## 安全提示
+
+- `.env` / `data/` / `dist/` **不入库**（`.gitignore` 已排除），请勿把它们提交上来
+- 本系统会**真实发起渗透测试流量**，请只对**已授权**的目标使用
+- 内置命令拦截规则（`/function/commands`）默认拦截破坏性操作，但**不能替代授权管理**
+
+---
+
+> 以下为上游 ARTEX 的原始 README 内容。
+
+---
+
+<div align="center">
+
 # ARTEX
 
 AI 自主渗透测试系统（Go 后端 + Next.js 前端）
