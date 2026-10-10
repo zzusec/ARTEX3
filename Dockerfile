@@ -17,6 +17,7 @@ ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates ripgrep curl wget vim git jq unzip \
       dnsutils iputils-ping netcat-openbsd inetutils-telnet whois nmap \
+      sqlmap whatweb dirb hydra gobuster wapiti \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -29,6 +30,25 @@ RUN npm install -g @playwright/mcp@latest @playwright/cli@latest playwright@late
     && playwright-cli --help \
     && playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
+# PENTEST_TOOLS_V1 — 渗透测试工具（GitHub release 二进制，版本已固定）
+# nuclei / httpx：漏洞模板扫描与 HTTP 探测的主力；ffuf / gobuster：目录与子域爆破。
+ARG TARGETARCH
+RUN set -eux; \
+    case "${TARGETARCH:-amd64}" in \
+      arm64) NA=arm64 ;; \
+      *)     NA=amd64 ;; \
+    esac; \
+    cd /tmp; \
+    curl -fsSL -o n.zip "https://github.com/projectdiscovery/nuclei/releases/download/v3.11.1/nuclei_3.11.1_linux_${NA}.zip"; \
+    curl -fsSL -o h.zip "https://github.com/projectdiscovery/httpx/releases/download/v1.12.0/httpx_1.12.0_linux_${NA}.zip"; \
+    curl -fsSL -o f.tgz "https://github.com/ffuf/ffuf/releases/download/v2.3.0/ffuf_2.3.0_linux_${NA}.tar.gz"; \
+    unzip -o -j n.zip nuclei -d /usr/local/bin/; \
+    unzip -o -j h.zip httpx  -d /usr/local/bin/; \
+    tar xzf f.tgz ffuf;      install -m755 ffuf     /usr/local/bin/ffuf; \
+    chmod +x /usr/local/bin/nuclei /usr/local/bin/httpx; \
+    rm -rf /tmp/n.zip /tmp/h.zip /tmp/f.tgz /tmp/ffuf; \
+    nuclei -version; httpx -version; ffuf -V; gobuster version
+
 WORKDIR /app
 # 预编译好的对应架构二进制（dist/amd64/artex 或 dist/arm64/artex）
 COPY dist/${TARGETARCH}/artex /app/artex

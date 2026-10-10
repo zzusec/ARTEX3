@@ -1,0 +1,5 @@
+# 本地构建的镜像（官方 autumn27/artex 为私有，改为本地构建）
+services:
+  artex:
+    image: artex:local
+    pull_policy: never
